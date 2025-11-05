@@ -1,0 +1,150 @@
+name: Build and Deploy Master Template
+
+# 触发器：
+# - push 到 main：发布最新模板到所有站点（批量）
+# - 手动触发（workflow_dispatch）：可选择仅部署到指定站点
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      target_site_path:
+        description: "可选：只部署到某一个站点的绝对路径 (例如 /www/wwwroot/example.com)"
+        required: false
+        type: string
+
+jobs:
+  # --- 作业 1: 构建 React/Vite 应用 ---
+  build:
+    name: 1. Build Vite Project
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm' # 缓存 npm 包以加快速度
+
+      - name: Install Dependencies
+        # npm ci 是 CI/CD 的标准，它比 install 更快更严格 [7]
+        run: npm ci 
+
+      - name: Build Production App
+        # 运行 build 脚本 (在 package.json 中定义) [8]
+        run: npm run build # 这会创建./dist 文件夹
+
+      - name: Upload Build Artifact
+        # 将./dist 文件夹保存为“产物”，以便下一个作业可以使用它
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-build-dist
+          path:./dist
+
+  # --- 作业 2: 将构建产物部署到所有站点 ---
+  deploy:
+    name: 2. Deploy to Baota Server
+    needs: build # 确保此作业在 'build' 作业成功后才运行
+    runs-on: ubuntu-latest
+
+    # --- 关键：使用 Matrix 策略批量部署 ---
+    # 在这里手动维护您所有站点的“服务器绝对路径”
+    strategy:
+      matrix:
+        site_path:
+          # 运行 'create_site.py' 后，您需要来这里添加新站点的路径
+          - /www/wwwroot/xmyxyswkj.com
+          # - /www/wwwroot/client-c.com
+          #... 您可以在这里列出100个
+
+    steps:
+      - name: Download Build Artifact
+        # 下载 'build' 作业保存的./dist 文件夹
+        uses: actions/download-artifact@v4
+        with:
+          name: vite-build-dist
+          path:./dist
+
+      - name: Deploy to ${{ matrix.site_path }} via Rsync
+        # 使用一个专为 rsync 部署设计的 Action [6]
+        uses: burnett01/rsync-deployments@7.1.0 
+        with:
+          # --- 这是整个架构中最关键的配置 ---
+          switches: >
+            -avzr
+            --delete
+            --exclude 'config.json'
+            
+          # -avzr: 归档, 详细, 压缩, 递归
+          # --delete: 删除服务器上有、但本地 dist 中没有的旧文件 (保持同步) [9]
+          # --exclude 'config.json': 告诉 rsync “跳过”这个文件，
+          #                       绝对不要用我们通用的 dist 覆盖掉服务器上专属的 config.json
+          
+          # 源目录:./dist/ (本地构建产物)
+          # 注意末尾的 / 很重要，表示“复制 dist 的内容”
+          path:./dist/ 
+          
+          # 目标服务器 (从 GitHub Secrets 读取)
+          remote_host: ${{ secrets.BAOTA_SERVER_IP }}
+          remote_user: ${{ secrets.BAOTA_SSH_USER }}
+          remote_key: ${{ secrets.BAOTA_SSH_PRIVATE_KEY }}
+          
+          # 目标路径 (从上面的 matrix 变量中获取) [6]
+          remote_path: ${{ matrix.site_path }}
+
+      - name: Seed config.json if missing (first-time only)
+        # 仅在服务器上不存在时，推送一个默认的 config.json（不会覆盖已存在的文件）
+        uses: burnett01/rsync-deployments@7.1.0
+        with:
+          switches: >
+            -avzr
+            --ignore-existing
+          # 本地默认配置文件位置
+          path: ./public/config.json
+          remote_host: ${{ secrets.BAOTA_SERVER_IP }}
+          remote_user: ${{ secrets.BAOTA_SSH_USER }}
+          remote_key: ${{ secrets.BAOTA_SSH_PRIVATE_KEY }}
+          # 推送到站点根目录；若已有 config.json，该步骤不会覆盖
+          remote_path: ${{ matrix.site_path }}/
+
+  # --- 作业 3: 仅部署到一个指定站点（手动触发用） ---
+  deploy_single:
+    name: 3. Deploy Single Site (Manual)
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.target_site_path != '' }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vite-build-dist
+          path: ./dist
+
+      - name: Deploy to ${{ inputs.target_site_path }} via Rsync
+        uses: burnett01/rsync-deployments@7.1.0
+        with:
+          switches: >
+            -avzr
+            --delete
+            --exclude 'config.json'
+          path: ./dist/
+          remote_host: ${{ secrets.BAOTA_SERVER_IP }}
+          remote_user: ${{ secrets.BAOTA_SSH_USER }}
+          remote_key: ${{ secrets.BAOTA_SSH_PRIVATE_KEY }}
+          remote_path: ${{ inputs.target_site_path }}
+
+      - name: Seed config.json if missing (first-time only)
+        uses: burnett01/rsync-deployments@7.1.0
+        with:
+          switches: >
+            -avzr
+            --ignore-existing
+          path: ./public/config.json
+          remote_host: ${{ secrets.BAOTA_SERVER_IP }}
+          remote_user: ${{ secrets.BAOTA_SSH_USER }}
+          remote_key: ${{ secrets.BAOTA_SSH_PRIVATE_KEY }}
+          remote_path: ${{ inputs.target_site_path }}/
