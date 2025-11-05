@@ -1,0 +1,48 @@
+{
+  "siteIdentity": {
+    "name": "默认站点名称",
+    "logoUrl": "/default-logo.png"
+  },
+  "theming": {
+    "primaryColor": "#333333"
+  },
+  "apiEndpoints": {
+    "cmsBaseUrl": "https://api.yourdomain.com",
+    "cmsSiteId": "default-site"
+  },
+  "seo": {
+    "title": "默认站点名称",
+    "description": "这是一个通过 config.json 配置的示例站点。",
+    "keywords": ["示例", "站点", "配置", "Vite", "React"],
+    "canonicalUrl": ""
+  },
+  "hero": {
+    "title": "欢迎来到默认站点",
+    "subtitle": "使用外部配置批量建站",
+    "ctaText": "了解更多",
+    "ctaLink": "#"
+  },
+  "whatsNew": {
+    "title": "What's new at Salesforce",
+    "items": [
+      {
+        "title": "Product Feature 1",
+        "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+        "ctaText": "Learn more",
+        "ctaLink": "#"
+      },
+      {
+        "title": "Product Feature 2",
+        "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+        "ctaText": "Learn more",
+        "ctaLink": "#"
+      },
+      {
+        "title": "Product Feature 3",
+        "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+        "ctaText": "Learn more",
+        "ctaLink": "#"
+      }
+    ]
+  }
+}

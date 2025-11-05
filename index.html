@@ -1,0 +1,68 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>正在加载...</title>
+    <meta name="description" content="正在加载站点配置..." />
+
+    <script>
+      // 默认全局配置，防止加载失败时出现未定义
+      window.APP_CONFIG = {
+        siteIdentity: { name: '加载失败', logoUrl: '/default-logo.png' },
+        theming: { primaryColor: '#333333' },
+        apiEndpoints: { cmsBaseUrl: '', cmsSiteId: 'error' },
+        seo: { title: '正在加载...', description: '', keywords: [] },
+        hero: { title: '正在加载...', subtitle: '', ctaText: '了解更多', ctaLink: '#' }
+      };
+
+      try {
+        // 使用同步 XMLHttpRequest 阻塞后续脚本执行，确保在 React 渲染前拿到配置
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/config.json', false); // 同步请求
+        xhr.send(null);
+
+        if (xhr.status === 200) {
+          window.APP_CONFIG = JSON.parse(xhr.responseText);
+          var conf = window.APP_CONFIG || {};
+
+          // 设置文档标题和 SEO 元信息
+          var t = (conf.seo && conf.seo.title) || (conf.siteIdentity && conf.siteIdentity.name) || '站点';
+          document.title = t;
+
+          var desc = conf.seo && conf.seo.description;
+          if (desc) {
+            var metaDesc = document.querySelector('meta[name="description"]');
+            if (!metaDesc) {
+              metaDesc = document.createElement('meta');
+              metaDesc.setAttribute('name', 'description');
+              document.head.appendChild(metaDesc);
+            }
+            metaDesc.setAttribute('content', desc);
+          }
+
+          var keywords = conf.seo && conf.seo.keywords;
+          if (keywords && keywords.length) {
+            var metaKeywords = document.querySelector('meta[name="keywords"]');
+            if (!metaKeywords) {
+              metaKeywords = document.createElement('meta');
+              metaKeywords.setAttribute('name', 'keywords');
+              document.head.appendChild(metaKeywords);
+            }
+            metaKeywords.setAttribute('content', keywords.join(','));
+          }
+        } else {
+          console.warn('无法加载外部 config.json，将使用默认配置。');
+        }
+      } catch (error) {
+        console.error('加载 config.json 时出错:', error);
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+  
