@@ -43,7 +43,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vite-build-dist
-          path:./dist
+          path: ./dist
 
   # --- 作业 2: 将构建产物部署到所有站点 ---
   deploy:
@@ -67,7 +67,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: vite-build-dist
-          path:./dist
+          path: ./dist
 
       - name: Deploy to ${{ matrix.site_path }} via Rsync
         # 使用一个专为 rsync 部署设计的 Action [6]
@@ -86,7 +86,7 @@ jobs:
           
           # 源目录:./dist/ (本地构建产物)
           # 注意末尾的 / 很重要，表示“复制 dist 的内容”
-          path:./dist/ 
+          path: ./dist/ 
           
           # 目标服务器 (从 GitHub Secrets 读取)
           remote_host: ${{ secrets.BAOTA_SERVER_IP }}
