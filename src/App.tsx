@@ -1,7 +1,8 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, Menu, Search, User, X } from 'lucide-react'
 import { useConfig } from './contexts/ConfigContext'
+import { fetchCollection, getAssetUrl, StrapiItem } from './services/strapi'
 
 const App = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -13,7 +14,102 @@ const App = () => {
     { name: 'Learning', link: '#' },
     { name: 'Support', link: '#' },
     { name: 'Company', link: '#' },
+    { name: 'Blog', link: '#/blog' },
   ]
+
+  // ---- Minimal hash-based routing ----
+  type Route = { name: 'home' } | { name: 'blog' } | { name: 'article'; slug: string }
+  const [route, setRoute] = useState<Route>({ name: 'home' })
+
+  useEffect(() => {
+    const parse = () => {
+      const h = window.location.hash.replace(/^#/, '')
+      const parts = h.split('/').filter(Boolean)
+      if (parts[0] === 'blog') {
+        if (parts[1]) setRoute({ name: 'article', slug: decodeURIComponent(parts[1]) })
+        else setRoute({ name: 'blog' })
+      } else {
+        setRoute({ name: 'home' })
+      }
+    }
+    parse()
+    window.addEventListener('hashchange', parse)
+    return () => window.removeEventListener('hashchange', parse)
+  }, [])
+
+  // ---- Strapi Articles (filtered by related Site slug) ----
+  type ArticleAttrs = {
+    title?: string
+    description?: string
+    slug?: string
+    cover?: { data?: { attributes?: { url?: string } } }
+    blocks?: any[]
+    site?: { data?: { id: number; attributes?: { slug?: string; site_name?: string } } }
+  }
+  const [articles, setArticles] = useState<StrapiItem<ArticleAttrs>[]>([])
+  const [articlesLoading, setArticlesLoading] = useState(false)
+  const [articlesError, setArticlesError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const load = async () => {
+      const base = config.apiEndpoints?.cmsBaseUrl
+      const siteSlug = config.apiEndpoints?.cmsSiteId // 使用配置中的站点 slug
+      if (!base || !siteSlug) return
+
+      setArticlesLoading(true)
+      setArticlesError(null)
+      try {
+        const res = await fetchCollection<ArticleAttrs>(base, 'articles', {
+          // 关联过滤：按 Site 的 slug 过滤（Strapi v4）
+          'filters[site][slug][$eq]': siteSlug,
+          // 选择性字段与关联填充
+          'fields[0]': 'title',
+          'fields[1]': 'description',
+          'fields[2]': 'slug',
+          'populate[cover]': '*',
+          'populate[blocks]': '*,blocks',
+          'populate[site]': '*',
+          'publicationState': 'live',
+        })
+        setArticles(res.data || [])
+      } catch (e: any) {
+        setArticlesError(e.message || String(e))
+      } finally {
+        setArticlesLoading(false)
+      }
+    }
+    load()
+  }, [config.apiEndpoints?.cmsBaseUrl, config.apiEndpoints?.cmsSiteId])
+
+  // ---- Single article by slug ----
+  const [articleDetail, setArticleDetail] = useState<StrapiItem<ArticleAttrs> | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadDetail = async () => {
+      if (route.name !== 'article') return
+      const base = config.apiEndpoints?.cmsBaseUrl
+      if (!base) return
+      setDetailLoading(true)
+      setDetailError(null)
+      try {
+        const res = await fetchCollection<ArticleAttrs>(base, 'articles', {
+          'filters[slug][$eq]': route.slug,
+          'populate[cover]': '*',
+          'populate[blocks]': '*,blocks',
+          'populate[site]': '*',
+          'publicationState': 'live',
+        })
+        setArticleDetail(res.data?.[0] || null)
+      } catch (e: any) {
+        setDetailError(e.message || String(e))
+      } finally {
+        setDetailLoading(false)
+      }
+    }
+    loadDetail()
+  }, [route, config.apiEndpoints?.cmsBaseUrl])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -200,6 +296,81 @@ const App = () => {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Articles from Strapi */}
+      <div className="bg-gray-50 py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {route.name !== 'article' && (
+            <>
+              <h2 className="text-center text-3xl font-extrabold text-gray-900 sm:text-4xl">
+                Blog
+              </h2>
+              {articlesLoading && (
+                <p className="mt-6 text-center text-gray-500">Loading articles…</p>
+              )}
+              {articlesError && (
+                <p className="mt-6 text-center text-red-600">{articlesError}</p>
+              )}
+              {!articlesLoading && !articlesError && (
+                <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+                  {articles.map((item) => {
+                    const coverUrl = getAssetUrl(
+                      config.apiEndpoints?.cmsBaseUrl || '',
+                      item.attributes?.cover?.data?.attributes?.url
+                    )
+                    return (
+                      <article key={item.id} className="bg-white rounded-lg shadow-sm overflow-hidden">
+                        {coverUrl && (
+                          <img src={coverUrl} alt={item.attributes?.title || ''} className="h-48 w-full object-cover" />
+                        )}
+                        <div className="p-6">
+                          <h3 className="text-lg font-semibold text-gray-900">{item.attributes?.title}</h3>
+                          {item.attributes?.description && (
+                            <p className="mt-2 text-gray-600 text-sm">{item.attributes.description}</p>
+                          )}
+                          <a
+                            href={`#/blog/${item.attributes?.slug || item.id}`}
+                            className="mt-4 inline-flex items-center text-salesforce-blue hover:text-salesforce-dark-blue text-sm font-medium"
+                          >
+                            Read more
+                          </a>
+                        </div>
+                      </article>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {route.name === 'article' && (
+            <div className="max-w-3xl mx-auto">
+              {detailLoading && <p className="text-center text-gray-500">Loading…</p>}
+              {detailError && <p className="text-center text-red-600">{detailError}</p>}
+              {!detailLoading && !detailError && articleDetail && (
+                <article>
+                  {(() => {
+                    const coverUrl = getAssetUrl(
+                      config.apiEndpoints?.cmsBaseUrl || '',
+                      articleDetail.attributes?.cover?.data?.attributes?.url
+                    )
+                    return coverUrl ? (
+                      <img src={coverUrl} alt={articleDetail.attributes?.title || ''} className="h-64 w-full object-cover rounded" />
+                    ) : null
+                  })()}
+                  <h1 className="mt-6 text-3xl font-bold text-gray-900">{articleDetail.attributes?.title}</h1>
+                  {articleDetail.attributes?.description && (
+                    <p className="mt-4 text-gray-700">{articleDetail.attributes.description}</p>
+                  )}
+                </article>
+              )}
+              <div className="mt-8">
+                <a href="#/blog" className="text-salesforce-blue">← Back to Blog</a>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
