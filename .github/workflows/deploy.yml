@@ -81,7 +81,15 @@ jobs:
 
       - name: Deploy to ${{ matrix.site_path }} via rsync
         run: |
-          rsync -avzr --delete --exclude=config.json ./dist/ ${{ secrets.BAOTA_SSH_USER }}@${{ secrets.BAOTA_SERVER_IP }}:${{ matrix.site_path }}
+          rsync -rlDz \
+            --delete \
+            --omit-dir-times \
+            --exclude='config.json' \
+            --exclude='.user.ini' \
+            --exclude='.well-known/' \
+            --exclude='logs/' \
+            --exclude='ssl/' \
+            ./dist/ ${{ secrets.BAOTA_SSH_USER }}@${{ secrets.BAOTA_SERVER_IP }}:${{ matrix.site_path }}
 
       - name: Seed config.json if missing (first-time only)
         run: |
@@ -112,7 +120,15 @@ jobs:
 
       - name: Deploy to ${{ inputs.target_site_path }} via rsync
         run: |
-          rsync -avzr --delete --exclude=config.json ./dist/ ${{ secrets.BAOTA_SSH_USER }}@${{ secrets.BAOTA_SERVER_IP }}:${{ inputs.target_site_path }}
+          rsync -rlDz \
+            --delete \
+            --omit-dir-times \
+            --exclude='config.json' \
+            --exclude='.user.ini' \
+            --exclude='.well-known/' \
+            --exclude='logs/' \
+            --exclude='ssl/' \
+            ./dist/ ${{ secrets.BAOTA_SSH_USER }}@${{ secrets.BAOTA_SERVER_IP }}:${{ inputs.target_site_path }}
 
       - name: Seed config.json if missing (first-time only)
         run: |
